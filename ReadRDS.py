@@ -50,7 +50,7 @@ bufType=nposc.dtype(
         ]
 )
 
-osc = np.fromfile('C:/KOS/PyOsc/1.rdf', dtype=bufType,count=1000,offset=34)
+osc = nposc.fromfile('E:/KosPy/Samples/py_osc_tavr/Osc/1.rdf', dtype=bufType,count=1000,offset=34)
 
 
 import matplotlib.pyplot as plt
