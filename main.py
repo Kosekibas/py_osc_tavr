@@ -3,7 +3,7 @@ import os
 import openpyxl
 import sys
 
-root_path = "C:\Users\��������\Desktop\q"
+root_path = "C:\\Users\\Владелец\\Desktop\\Examples\\python\\Osc\\"
 param_1 = "kt_i_max_down"
 param_2 = "kt-imax_down"
 
