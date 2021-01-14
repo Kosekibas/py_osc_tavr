@@ -17,7 +17,7 @@ def Getfiles_osc(path):
             name_list=name.split(".")
             if name_list[len(name_list)-1] == "rdf":
                 size=os.path.getsize(root+'\\'+name)
-                files_osc_.loc[files_osc_.shape[0]]=[root,name,size,0]
+                files_osc_.loc[files_osc_.shape[0]]=[root,name,size,'0']
                 
     return files_osc_
 
@@ -44,8 +44,12 @@ if __name__ == '__main__':
             for name in folder_name: #перебор названий каждой папки
                 if tavr.station==name: # если совпало название папки и название станции
                     #todo рекурсивно проверяять еще серийники и записывать в следующие столбцы или через разделитель
-                    count+=1
-                    files_osc.number[osc.Index]=tavr.serial_number #!! записываем в массив номер тавра
+                    #if osc.Index != 0:
+                    if files_osc.number[osc.Index]=='0':
+                        count+=1
+                        files_osc.number[osc.Index]=str(tavr.serial_number) #!! записываем в массив номер тавра
+                    else:
+                        files_osc.number[osc.Index]=str(files_osc.number[osc.Index])+','+str(tavr.serial_number)
     print('End')
     print('нащел ', count, 'совпадений')
 # экспорт в csv файл
