@@ -1,4 +1,4 @@
-\.vscode\*
-\logs\*
-\.kosPy\*
-\osc\*
+.vscode/
+/logs/
+.kosPy/
+/Osc/dir/
