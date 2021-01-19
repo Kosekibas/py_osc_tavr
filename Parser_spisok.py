@@ -16,7 +16,7 @@ bufType = np.dtype(
         ('b10', 'i2'),
         ('b11', 'i2'),
         ('b12', 'i2'),
-        ('b13', 'i2'),
+        ('b13', 'u2'),
         ('b14', 'i2'),
         ('b15', 'i2')
     ]
@@ -49,5 +49,5 @@ for osc  in files_osc.itertuples(): # перебор путей найденны
                         dtype=bufType, count=1, offset=4) )
       
 pd_parser=pd.DataFrame(parser_beginning) # конвертируем numpy в pandas
-pd_parser.merge(files_osc.name,how='left', left_on='index',right_on='index')
+pd_parser=pd_parser.merge(files_osc.name,how='right', left_index=True, right_index=True) # добавление к распарсеному имен файлов
 print(pd_parser)
