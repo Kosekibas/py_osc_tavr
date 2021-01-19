@@ -51,3 +51,4 @@ for osc  in files_osc.itertuples(): # перебор путей найденны
 pd_parser=pd.DataFrame(parser_beginning) # конвертируем numpy в pandas
 pd_parser=pd_parser.merge(files_osc.name,how='right', left_index=True, right_index=True) # добавление к распарсеному имен файлов
 print(pd_parser)
+pd_parser.to_csv('parser_beginning.csv') # экспорт в csv файл
