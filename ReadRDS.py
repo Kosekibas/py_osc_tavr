@@ -67,7 +67,7 @@ bufType = np.dtype(
 )
 
 osc = np.fromfile('E:/KosPy/Samples/py_osc_tavr/Osc/2.rdf',
-                     dtype=bufType, count=1500, offset=34)
+                    dtype=bufType, count=1500, offset=34)
 
 
 # График мультизонный
@@ -85,7 +85,8 @@ for ax in axes.flat:
     ax.text(-150, 0.0, str(dio_name[n]), color='black')
     ax.stem(~(osc['Dio'] >> n-1) & 1, linefmt='C0-',
             markerfmt='C0-', basefmt='C0-')
-    n += 1
+    n += 1\
+        
 plt.show()
 
 #Analog

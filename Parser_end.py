@@ -1,25 +1,25 @@
 import pandas as pd
 import os
 import numpy as np
-import  time # для корвертирования времени
+import  time # для конвертирования времени
 delta_sec=312854400 # мутная константа(секунды), прибавляется к распарсенному времени, чтобы получить правду
 bufType = np.dtype(
     [
-        ('b1', 'i2'),
-        ('b2', 'i2'),
-        ('b3', 'i2'),
-        ('b4', 'i2'),
-        ('b5', 'i2'),
-        ('b6', 'i2'),
-        ('b7', 'i2'),
-        ('b8', 'i2'),
-        ('b9', 'i2'),
-        ('b10', 'i2'),
-        ('b11', 'i2'),
-        ('b12', 'i2'),
-        # ('b13', 'u2'),
+        ('b1', 'u4'),
+        ('b2', 'u4'),
+        ('b3', 'u4'),
+        ('b4', 'u4'),
+        ('b5', 'u4'),
+        ('b6', 'u4'),
+        ('b7', 'u4'),
+        ('b8', 'u4'),
+        ('b9', 'u4'),
+        ('b10', 'u4'),
+        ('b11', 'u4'),
+        ('b12', 'u4'),
+        ('b13', 'u4'),
         ('b14', 'u4'),
-        ('b15', 'i2')
+        ('b15', 'u4')
     ]
 )
 
@@ -44,18 +44,14 @@ files_osc = Getfiles_osc(root_path)   #составления списка ос�
 for osc  in files_osc.itertuples(): # перебор путей найденных файлов осцилограм
     if osc.Index == 0: #если открыли первый файл, то создается массив из файла
         parser_beginning= np.fromfile(osc.root+osc.name,
-                        dtype=bufType, count=1, offset=4)
-        b14_as_time=np.array(time.strftime("%Y-%m-%d_%H.%M.%S", time.gmtime(parser_beginning['b14'][osc.Index]+delta_sec)),dtype=[('time', 'U19')])
+                        dtype=bufType, count=1, offset=30034)
 
     else: #если файл не первый, то к существующему массиву прибавляем строку из файла
         parser_beginning=np.append(parser_beginning,np.fromfile(osc.root+osc.name,
-                        dtype=bufType, count=1, offset=4) )
-        z=np.array(time.strftime("%Y-%m-%d_%H.%M.%S",time.gmtime(parser_beginning['b14'][osc.Index]+delta_sec)),dtype=[('time', 'U19')])
-        b14_as_time=np.append(b14_as_time,z)
-pd_b14_as_time=pd.DataFrame(b14_as_time)
+                        dtype=bufType, count=1, offset=30034) )
+
 pd_parser=pd.DataFrame(parser_beginning) # конвертируем numpy в pandas
 pd_parser=pd_parser.merge(files_osc.name,how='right', left_index=True, right_index=True) # добавление к распарсеному имен файлов
-pd_parser=pd_parser.merge(pd_b14_as_time,how='right', left_index=True, right_index=True)
-print(pd_parser)
 
-pd_parser.to_csv('parser_beginning.csv') # экспорт в csv файл
+print(pd_parser)
+pd_parser.to_csv('parser_ende.csv') # экспорт в csv файл

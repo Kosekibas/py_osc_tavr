@@ -66,12 +66,12 @@ if __name__ == '__main__':
                     else:
                         files_osc.number[osc.Index]=str(files_osc.number[osc.Index])+','+str(tavr.serial_number)
     print('нащел ', count, 'совпадений')
-
-#no_dublicat=files_osc.drop_duplicates(subset=['name','number']) # поиск дубликатов и удаление дубликатов
-#no_dublicat.to_csv('no_dublicat.csv') # экспорт в csv файл
-files_osc.to_csv('Osc_number.csv') # экспорт в csv файл
-
-if Copyfiles_osc(files_osc,copy_path):
-    print('полное копирование ОК')
-else:
-    print('частичное копирование ОК')
+    #no_dublicat=files_osc.drop_duplicates(subset=['name','number']) # поиск дубликатов и удаление дубликатов
+    #no_dublicat.to_csv('no_dublicat.csv') # экспорт в csv файл
+    files_osc.to_csv('Osc_number.csv') # экспорт в csv файл
+    # копирование в папку
+    if input("копировать? (y/n)") == 'y':
+        if Copyfiles_osc(files_osc,copy_path):
+            print('полное копирование ОК')
+        else:
+            print('частичное копирование ОК')
