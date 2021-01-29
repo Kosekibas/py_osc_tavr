@@ -1,12 +1,13 @@
 # todo набить скелет стандартный словарь или панду
 # todo побайтно проверять данные и закидывать в словарь
 
-
-
 import os
 import pandas as pd
 import numpy as np
 import  time # для конвертирования времени
+
+import sqlite3
+from sqlite3 import Error
 
 # root_path = 'C:\\Users\\Владелец\\Desktop\\Examples\\python\\Osc\\dir\\'
 # root_path = "E:\\KosPy\\Samples\\py_osc_tavr\\Osc\\"
@@ -22,6 +23,11 @@ dict_vers = {
     'v6': 0,
     'time': 0
     }
+
+#собираем SQL запрос динамически 
+q_create_table_msg = """ 
+
+"""
 
 dict_graph = {} #пустой словарь настроек отображения графиков
 # style = { #словарь свойств линий графиков
@@ -97,12 +103,16 @@ def Getfiles(path,extension): # Получение списка файлов в 
 
 
 def Parsing_osc (root_path):
+    connect=sql_connection()
+    sql_table(connect)
     for osc  in files_osc.itertuples(): # перебор путей найденных файлов осцилограм
         with open (osc.root+osc.name, 'rb') as file:
-            dict_osc[osc.Index]=RdfVersion1(file,osc.Index,osc.name)
+            # dict_osc[osc.Index]=RdfVersion1(file,osc.name) #парсинг в словарь питона
+            RdfToDb(file,osc.Index,osc.name,connect)
+            print(1)
 
-
-def RdfVersion1(file,Index,name):
+# парсинг в словарь питона
+def RdfVersion1(file,name): 
     dict_msg={}
     #! засунуть проверку на вылет, когда не может декодировать rdf
     dict_vers['extension']=file.read (4).decode('ANSI')
@@ -169,23 +179,35 @@ def RdfVersion1(file,Index,name):
                 event= 'не найден'
         return {"name":name,"info":dict_vers,"msg":dict_msg}
 
-
-def RdfToDb(file,Index,name):
+#парсинг в БД
+def RdfToDb(file,Index,name,con): 
+    cursor = con.cursor() # обьявляем курсор
     #! засунуть проверку на вылет, когда не может декодировать rdf
-    dict_vers['extension']=file.read (4).decode('ANSI')
-    if dict_vers['extension']=="RDF":
-        dict_vers['v1']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['v2']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['v3']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['v4']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['v5']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['v6']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        dict_vers['time']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-        
+    file_extension =file.read (4).decode('ANSI')
+    if file_extension=="RDF":
+        list_version=[ #парсим заголовок
+            Index, # index
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v1
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v2
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v3
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v4
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v5
+            int.from_bytes(file.read (4),byteorder='little',signed=0), # v6
+        ]
+        file_date=int.from_bytes(file.read (4),byteorder='little',signed=0) # date
+        #записываем имя и номер файла в таблицу файлов
+        #! индекс для асоциации необходимо получать по таблице files в db
+        list_files = [Index,name,file_date]
+        cursor.execute('INSERT INTO "files"("id","name","date") VALUES(?,?,?)', list_files)
+        #записываем заголовок в таблицу
+        cursor.execute('INSERT INTO "version"("id","v1" , "v2", "v3", "v4", "v5", "v6") VALUES(?,?, ?, ?, ?, ?,?)', list_version)
+
         log=file.read (30050)
         # сообщение в заголовке
         title_log=int.from_bytes(file.read (1),byteorder='little',signed=0) #длинна байт
-        title_msg=file.read (title_log).decode(encoding='ANSI') # само сообщение
+        title_msg=file.read (title_log).decode(encoding='ANSI') # само сообщение 
+        # TODO засовывать сообщение в таблицу через обращение UPDATE table1 SET name = ‘Людмила Иванова’ WHERE id = 2; 
+        
         # отображение графиков
         osc_graph_format_string_count=int.from_bytes(file.read (4),byteorder='little',signed=0) #читаем количество отоброжаемых окон графиков
         for n in range(osc_graph_format_string_count): 
@@ -196,29 +218,73 @@ def RdfToDb(file,Index,name):
         file.seek(file.tell()+20)#? ... пропускаем
         # парсим сообщения
         m_iMessageCount=int.from_bytes(file.read (4),byteorder='little',signed=0) #количество сообщений
-        for m in range(m_iMessageCount):
-            dict_msg[m]=msg
-            dict_msg[m]['num']=int.from_bytes(file.read (2),byteorder='little',signed=0)
-            dict_msg[m]['time']=int.from_bytes(file.read (4),byteorder='little',signed=0)
-            dict_msg[m]['msg']=file.read (1).decode('ANSI')
-            dict_msg[m]['style']=file.read (1).decode('ANSI')
-            dict_msg[m]['code']=dict_code[int.from_bytes(file.read (1),byteorder='little',signed=0 )]
-            if dict_msg[m]['time'] == dict_vers['time']:
+        for m in range(m_iMessageCount): # парсим сообщения построчно
+            list_msg=[
+                int.from_bytes(file.read (2),byteorder='little',signed=0), #num
+                int.from_bytes(file.read (4),byteorder='little',signed=0), #time
+                file.read (1).decode('ANSI'),   #msg
+                file.read (1).decode('ANSI'),   #style
+                dict_code[int.from_bytes(file.read (1),byteorder='little',signed=0 )], #code
+                Index
+                ]
+            if list_msg[1] == dict_vers['time']:
                 event_counter=1
-                event= dict_msg[m]['code']
-            elif dict_msg[m]['time']+1 == dict_vers['time']:
+                event= list_msg[1]
+            elif list_msg[1]+1 ==dict_vers['time']:
                 event_counter=2
-                event= dict_msg[m]['code']
-            elif dict_msg[m]['time']+2 == dict_vers['time']:
+                event= list_msg[1]
+            elif list_msg[1]+2 == dict_vers['time']:
                 event_counter=3
-                event= dict_msg[m]['code']
+                event= list_msg[1]
             else:
                 event_counter=0
                 event= 'не найден'
-        dict_osc[Index]={"name":name,"info":dict_vers,"msg":dict_msg}
+            # переносим в таблицу сообщений
+            cursor.execute('INSERT INTO "msg"(num, date, msg, style, code, id_osc) VALUES(?, ?, ?, ?, ?,?)', list_msg)
+        con.commit() 
 
+
+def sql_connection(): # подключение базы данных
+    try:
+        con = sqlite3.connect("kos_sqllite_temp.db")
+        return con
+    except Error:
+        print(Error)
+
+def sql_table(con): # создание таблицы
+    cursor = con.cursor() # обьявляем курсор
+    #создаем таблицу сообщений если она еще не существует
+    cursor.execute("""CREATE TABLE IF NOT EXISTS "msg" (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+    num INTEGER, 
+    date INTEGER, 
+    msg TEXT, 
+    style TEXT, 
+    code TEXT,
+    id_osc INTEGER
+    )""") 
+    #  таблица версий файлов
+    cursor.execute("""CREATE TABLE IF NOT EXISTS "version" (
+    "id" INTEGER PRIMARY KEY UNIQUE, 
+    "v1" INTEGER, 
+    "v2" INTEGER, 
+    "v3" INTEGER, 
+    "v4" INTEGER, 
+    "v5" INTEGER, 
+    "v6" INTEGER
+    )""")
+    #  таблица файлов
+    cursor.execute("""CREATE TABLE IF NOT EXISTS "files" (
+    "id" INTEGER PRIMARY KEY UNIQUE, 
+    "number"INTEGER,
+    "event" TEXT, 
+    "date" INTEGER, 
+    "name" TEXT, 
+    "usr_msg" TEXT 
+    )""")
+    con.commit()    # сохраняем изменения
 
 if __name__ == '__main__':
     files_osc = Getfiles(root_path,"rdf")   #составления списка осцилограмм
     Parsing_osc (root_path)
-    print (dict_osc[1])
+    # print (dict_osc[1])
