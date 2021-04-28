@@ -1,5 +1,6 @@
 # todo набить скелет стандартный словарь или панду
 # todo побайтно проверять данные и закидывать в словарь
+        # TODO засовывать сообщение в таблицу через обращение UPDATE table1 SET name = ‘Людмила Иванова’ WHERE id = 2; 
 
 import os
 import pandas as pd
@@ -109,7 +110,7 @@ def Parsing_osc (root_path):
         with open (osc.root+osc.name, 'rb') as file:
             # dict_osc[osc.Index]=RdfVersion1(file,osc.name) #парсинг в словарь питона
             RdfToDb(file,osc.Index,osc.name,connect)
-            print(1)
+
 
 # парсинг в словарь питона
 def RdfVersion1(file,name): 
@@ -186,7 +187,6 @@ def RdfToDb(file,Index,name,con):
     file_extension =file.read (4).decode('ANSI')
     if file_extension=="RDF":
         list_version=[ #парсим заголовок
-            Index, # index
             int.from_bytes(file.read (4),byteorder='little',signed=0), # v1
             int.from_bytes(file.read (4),byteorder='little',signed=0), # v2
             int.from_bytes(file.read (4),byteorder='little',signed=0), # v3
@@ -195,29 +195,69 @@ def RdfToDb(file,Index,name,con):
             int.from_bytes(file.read (4),byteorder='little',signed=0), # v6
         ]
         file_date=int.from_bytes(file.read (4),byteorder='little',signed=0) # date
-        #записываем имя и номер файла в таблицу файлов
-        #! индекс для асоциации необходимо получать по таблице files в db
-        list_files = [Index,name,file_date]
-        cursor.execute('INSERT INTO "files"("id","name","date") VALUES(?,?,?)', list_files)
-        #записываем заголовок в таблицу
-        cursor.execute('INSERT INTO "version"("id","v1" , "v2", "v3", "v4", "v5", "v6") VALUES(?,?, ?, ?, ?, ?,?)', list_version)
+        # прыгнуть курсором в первый аналоговый вход записать его в контрольный. На основане данного контрольного и вермени создания проверять на повторы
+        file.seek(46) # скачем к первым выборкам Uab по вводам
+        file_control=int.from_bytes(file.read (4),byteorder='little',signed=0) # читаем их вместе
+        file.seek(32)
+        # тут производить проверу на уникальность.
+        cursor.execute('SELECT id FROM files WHERE "date"=? AND "control"=?',(file_date,file_control))
+        is_duplicate = cursor.fetchall()
+        if is_duplicate:
+            print("Уже в списке")
+            return
+        
+        #парсим выборки
+        sample_count=int.from_bytes(file.read (2),byteorder='little',signed=0)//10 #количество выборок на осцилограмму(10 байт на выборку(//деление int без остатка)) 
+        list_sample=[]
+        for n in range(sample_count): 
+            # строка выборок 
+            list_sample.append([
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (2),byteorder='little',signed=1), #
+                int.from_bytes(file.read (1),byteorder='little',signed=0), #
+                int.from_bytes(file.read (1),byteorder='little',signed=0), #
+                int.from_bytes(file.read (1),byteorder='little',signed=0), #
+                int.from_bytes(file.read (1),byteorder='little',signed=0), #
+            ])
+        print(121)
+        # log=file.read (30050)
 
-        log=file.read (30050)
         # сообщение в заголовке
         title_log=int.from_bytes(file.read (1),byteorder='little',signed=0) #длинна байт
         title_msg=file.read (title_log).decode(encoding='ANSI') # само сообщение 
-        # TODO засовывать сообщение в таблицу через обращение UPDATE table1 SET name = ‘Людмила Иванова’ WHERE id = 2; 
-        
+
+        #!! кривенько компонуем строку, нужно пересмотреть метод
+        list_files=[file_date,name,title_msg,file_control]
+        list_files.extend(list_version)
+        # TODO экспорт в БД производить вне функции выплевывая из нее массив данных.
+        cursor.execute('INSERT INTO "files"("date","name","usr_msg","control","v1","v2","v3","v4","v5","v6") VALUES(?,?,?,?,?,?,?,?,?,?)', list_files)
+        # получаем индекс присвоенный в бД
+        index=cursor.execute('SELECT LAST_INSERT_ROWID()').lastrowid
+        # прописываем индекс в список выборок
+        for n in range(sample_count): 
+            list_sample[n].append(index)
+        # прописываем в БД
+        cursor.executemany('INSERT INTO "samples" VALUES(NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)', list_sample)
+
         # отображение графиков
-        osc_graph_format_string_count=int.from_bytes(file.read (4),byteorder='little',signed=0) #читаем количество отоброжаемых окон графиков
+        osc_graph_format_string_count=int.from_bytes(file.read (4),byteorder='little',signed=0) #читаем количество отображаемых окон графиков
         for n in range(osc_graph_format_string_count): 
             osc_graph_format_line_count = int.from_bytes(file.read (4),byteorder='little',signed=0) #количество графиков в окне
             for m in range(osc_graph_format_line_count):
                 file.seek(file.tell()+13) #? ... пропускаем
             file.seek(file.tell()+20) #? ... пропускаем
         file.seek(file.tell()+20)#? ... пропускаем
+
         # парсим сообщения
         m_iMessageCount=int.from_bytes(file.read (4),byteorder='little',signed=0) #количество сообщений
+        #TODO проверка если сообщений 0
+        event= 'не найден'
         for m in range(m_iMessageCount): # парсим сообщения построчно
             list_msg=[
                 int.from_bytes(file.read (2),byteorder='little',signed=0), #num
@@ -225,22 +265,25 @@ def RdfToDb(file,Index,name,con):
                 file.read (1).decode('ANSI'),   #msg
                 file.read (1).decode('ANSI'),   #style
                 dict_code[int.from_bytes(file.read (1),byteorder='little',signed=0 )], #code
-                Index
+                index
                 ]
-            if list_msg[1] == dict_vers['time']:
-                event_counter=1
-                event= list_msg[1]
-            elif list_msg[1]+1 ==dict_vers['time']:
-                event_counter=2
-                event= list_msg[1]
-            elif list_msg[1]+2 == dict_vers['time']:
-                event_counter=3
-                event= list_msg[1]
-            else:
-                event_counter=0
-                event= 'не найден'
             # переносим в таблицу сообщений
             cursor.execute('INSERT INTO "msg"(num, date, msg, style, code, id_osc) VALUES(?, ?, ?, ?, ?,?)', list_msg)
+            # ищем событие соответствующее времени создания осцилограммы 
+            if event== 'не найден':
+                if list_msg[1] == file_date:
+                    print('событие смещено по времени на ', 0 ,'сек.')
+                    event= list_msg[4]
+                elif list_msg[1]+1 ==file_date:
+                    print('событие смещено по времени на ', 1 ,'сек.')
+                    event= list_msg[4]
+                elif list_msg[1]+2 == file_date:
+                    print('событие смещено по времени на ', 2 ,'сек.')
+                    event= list_msg[4]
+                if event== 'АВТОМАТИЧ. ВНР ОТКЛ':
+                    event='не найден'
+        # добавляем найденное событие
+        cursor.execute("""UPDATE files SET "event" =?  WHERE "id" = ?""",[event,index])
         con.commit() 
 
 
@@ -263,16 +306,7 @@ def sql_table(con): # создание таблицы
     code TEXT,
     id_osc INTEGER
     )""") 
-    #  таблица версий файлов
-    cursor.execute("""CREATE TABLE IF NOT EXISTS "version" (
-    "id" INTEGER PRIMARY KEY UNIQUE, 
-    "v1" INTEGER, 
-    "v2" INTEGER, 
-    "v3" INTEGER, 
-    "v4" INTEGER, 
-    "v5" INTEGER, 
-    "v6" INTEGER
-    )""")
+
     #  таблица файлов
     cursor.execute("""CREATE TABLE IF NOT EXISTS "files" (
     "id" INTEGER PRIMARY KEY UNIQUE, 
@@ -280,8 +314,34 @@ def sql_table(con): # создание таблицы
     "event" TEXT, 
     "date" INTEGER, 
     "name" TEXT, 
-    "usr_msg" TEXT 
+    "usr_msg" TEXT,
+    "v1" INTEGER, 
+    "v2" INTEGER, 
+    "v3" INTEGER, 
+    "v4" INTEGER, 
+    "v5" INTEGER, 
+    "v6" INTEGER,
+    "control" INTEGER
     )""")
+
+    # таблица выборок 
+    cursor.execute("""CREATE TABLE IF NOT EXISTS "samples" (
+    "id" INTEGER PRIMARY KEY UNIQUE, 
+    "Ia1"INTEGER,
+    "Ic1" INTEGER, 
+    "Ia2" INTEGER, 
+    "Ic2" INTEGER, 
+    "Iakt" INTEGER,
+    "Ickt" INTEGER, 
+    "Uab1" INTEGER, 
+    "Uab2" INTEGER, 
+    "DIO_1" INTEGER, 
+    "DIO_2" INTEGER, 
+    "DIO_3" INTEGER,
+    "DIO_4" INTEGER,
+    "id_osc" INTEGER
+    )""")
+
     con.commit()    # сохраняем изменения
 
 if __name__ == '__main__':
